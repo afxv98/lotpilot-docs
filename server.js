@@ -15,6 +15,9 @@ app.post('/scrape', async (req, res) => {
   try {
     browser = await chromium.launch({
       headless: true,
+      executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH
+        ? undefined
+        : '/ms-playwright/chromium-1040/chrome-linux/chrome',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
