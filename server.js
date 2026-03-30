@@ -17,7 +17,7 @@ app.post('/scrape', async (req, res) => {
       headless: true,
       executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH
         ? undefined
-        : '/ms-playwright/chromium-1040/chrome-linux/chrome',
+        : '/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
