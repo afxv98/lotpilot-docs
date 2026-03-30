@@ -13,7 +13,7 @@ app.post('/scrape', async (req, res) => {
 
   let browser;
   try {
-    browser = await chromium.launch({
+    const launchOptions = {
       headless: true,
       executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH
         ? undefined
@@ -26,7 +26,13 @@ app.post('/scrape', async (req, res) => {
         '--disable-gpu',
         '--window-size=390,844',
       ]
-    });
+    };
+
+    if (process.env.PROXY_URL) {
+      launchOptions.proxy = { server: process.env.PROXY_URL };
+    }
+
+    browser = await chromium.launch(launchOptions);
 
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
