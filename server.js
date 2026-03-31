@@ -147,5 +147,36 @@ app.post('/scrape', async (req, res) => {
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
+app.get('/test-proxy', async (req, res) => {
+  let browser;
+  try {
+    const launchOptions = {
+      headless: true,
+      executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH
+        ? undefined
+        : '/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote']
+    };
+    if (process.env.PROXY_URL) {
+      const proxyUrl = new URL(process.env.PROXY_URL);
+      launchOptions.proxy = {
+        server: `${proxyUrl.protocol}//${proxyUrl.hostname}:${proxyUrl.port}`,
+        username: proxyUrl.username,
+        password: proxyUrl.password,
+      };
+    }
+    browser = await chromium.launch(launchOptions);
+    const page = await browser.newPage();
+    await page.goto('https://ip.decodo.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const body = await page.evaluate(() => document.body ? document.body.innerText : 'no body');
+    const url = page.url();
+    await browser.close();
+    res.json({ proxyConfigured: !!process.env.PROXY_URL, url, body });
+  } catch (err) {
+    if (browser) await browser.close();
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`CarFax scraper running on port ${PORT}`));
