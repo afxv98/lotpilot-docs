@@ -97,6 +97,12 @@ app.post('/scrape', async (req, res) => {
     const html = await page.content();
     const title = await page.title();
 
+    const debug = await page.evaluate(() => ({
+      readyState: document.readyState,
+      bodyLength: document.body ? document.body.innerHTML.length : -1,
+      htmlSnippet: document.documentElement ? document.documentElement.outerHTML.substring(0, 500) : 'null',
+    }));
+
     // Extract key data directly
     const data = await page.evaluate(() => {
       if (!document.body) return {};
@@ -124,8 +130,9 @@ app.post('/scrape', async (req, res) => {
       success: true,
       finalUrl,
       title,
+      debug,
       data,
-      html: html.substring(0, 50000) // cap at 50KB
+      html: html.substring(0, 50000)
     });
 
   } catch (err) {
