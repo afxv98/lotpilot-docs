@@ -73,6 +73,16 @@ app.post('/scrape', async (req, res) => {
       // Timeout on domcontentloaded is ok — proceed with whatever loaded
     }
 
+    // Wait for actual page content to render (handles SPA + proxy latency)
+    try {
+      await page.waitForFunction(
+        () => document.body && document.body.innerHTML.length > 1000,
+        { timeout: 60000 }
+      );
+    } catch (e) {
+      // Proceed with whatever is available
+    }
+
     // Wait for DataDome to resolve if present
     const isDataDome = await page.$('iframe[title*="DataDome"]');
     if (isDataDome) {
