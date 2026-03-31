@@ -63,10 +63,15 @@ app.post('/scrape', async (req, res) => {
       'Referer': 'https://www.capitolnissan.com/'
     });
 
-    await page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 45000
-    });
+    try {
+      await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60000
+      });
+    } catch (e) {
+      if (!e.message.includes('Timeout')) throw e;
+      // Timeout on domcontentloaded is ok — proceed with whatever loaded
+    }
 
     // Wait for DataDome to resolve if present
     const isDataDome = await page.$('iframe[title*="DataDome"]');
