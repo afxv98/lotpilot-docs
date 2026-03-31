@@ -69,9 +69,8 @@ app.post('/scrape', async (req, res) => {
     });
 
     // Wait for DataDome to resolve if present
-    const isDataDome = await page.$('iframe[title="DataDome Device Check"]');
+    const isDataDome = await page.$('iframe[title*="DataDome"]');
     if (isDataDome) {
-      // Wait longer for challenge to auto-resolve
       await page.waitForTimeout(8000);
       await page.reload({ waitUntil: 'networkidle' });
     }
@@ -84,19 +83,22 @@ app.post('/scrape', async (req, res) => {
 
     // Extract key data directly
     const data = await page.evaluate(() => {
+      if (!document.body) return {};
+
       const getText = (selector) => {
         const el = document.querySelector(selector);
         return el ? el.innerText.trim() : null;
       };
 
+      const bodyText = document.body.innerText || '';
       return {
         accidents: getText('[data-testid="ACCIDENT_HISTORY"]') ||
-                   document.body.innerText.match(/No Accidents.*Reported|(\d+) Accident/i)?.[0],
-        owners: document.body.innerText.match(/(\d+)-Owner/i)?.[0],
-        service: document.body.innerText.match(/(\d+) Service history/i)?.[0],
-        use: document.body.innerText.match(/Personal vehicle|Rental vehicle|Commercial/i)?.[0],
-        location: document.body.innerText.match(/Last owned in ([^\n]+)/i)?.[1],
-        records: document.body.innerText.match(/(\d+) Detailed records/i)?.[0],
+                   bodyText.match(/No Accidents.*Reported|(\d+) Accident/i)?.[0],
+        owners: bodyText.match(/(\d+)-Owner/i)?.[0],
+        service: bodyText.match(/(\d+) Service history/i)?.[0],
+        use: bodyText.match(/Personal vehicle|Rental vehicle|Commercial/i)?.[0],
+        location: bodyText.match(/Last owned in ([^\n]+)/i)?.[1],
+        records: bodyText.match(/(\d+) Detailed records/i)?.[0],
       };
     });
 
