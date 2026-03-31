@@ -64,7 +64,7 @@ app.post('/scrape', async (req, res) => {
     });
 
     await page.goto(url, {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: 45000
     });
 
@@ -72,12 +72,13 @@ app.post('/scrape', async (req, res) => {
     const isDataDome = await page.$('iframe[title*="DataDome"]');
     if (isDataDome) {
       await page.waitForTimeout(8000);
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
     }
 
     // Wait for CarFax content
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
+    const finalUrl = page.url();
     const html = await page.content();
     const title = await page.title();
 
@@ -106,6 +107,7 @@ app.post('/scrape', async (req, res) => {
 
     res.json({
       success: true,
+      finalUrl,
       title,
       data,
       html: html.substring(0, 50000) // cap at 50KB
