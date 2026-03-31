@@ -28,7 +28,12 @@ app.post('/scrape', async (req, res) => {
     };
 
     if (process.env.PROXY_URL) {
-      launchOptions.proxy = { server: process.env.PROXY_URL };
+      const proxyUrl = new URL(process.env.PROXY_URL);
+      launchOptions.proxy = {
+        server: `${proxyUrl.protocol}//${proxyUrl.hostname}:${proxyUrl.port}`,
+        username: proxyUrl.username,
+        password: proxyUrl.password,
+      };
     }
 
     browser = await chromium.launch(launchOptions);
