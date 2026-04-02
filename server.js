@@ -23,6 +23,7 @@ app.post('/scrape', async (req, res) => {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--no-zygote',
+        '--ignore-certificate-errors',
         '--window-size=390,844',
       ]
     };
