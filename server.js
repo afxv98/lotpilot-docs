@@ -17,7 +17,7 @@ app.post('/scrape', async (req, res) => {
       headless: true,
       executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH
         ? undefined
-        : '/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
+        : '/ms-playwright/chromium_headless_shell-1217/chrome-headless-shell-linux64/chrome-headless-shell',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -153,7 +153,7 @@ app.get('/test-proxy', async (req, res) => {
       headless: true,
       executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH
         ? undefined
-        : '/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
+        : '/ms-playwright/chromium_headless_shell-1217/chrome-headless-shell-linux64/chrome-headless-shell',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote']
     };
     if (process.env.PROXY_SERVER) {
