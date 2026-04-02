@@ -27,12 +27,11 @@ app.post('/scrape', async (req, res) => {
       ]
     };
 
-    if (process.env.PROXY_URL) {
-      const proxyUrl = new URL(process.env.PROXY_URL);
+    if (process.env.PROXY_SERVER) {
       launchOptions.proxy = {
-        server: `${proxyUrl.protocol}//${proxyUrl.hostname}:${proxyUrl.port}`,
-        username: proxyUrl.username,
-        password: proxyUrl.password,
+        server: process.env.PROXY_SERVER,
+        username: process.env.PROXY_USER,
+        password: process.env.PROXY_PASS,
       };
     }
 
@@ -157,12 +156,11 @@ app.get('/test-proxy', async (req, res) => {
         : '/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote']
     };
-    if (process.env.PROXY_URL) {
-      const proxyUrl = new URL(process.env.PROXY_URL);
+    if (process.env.PROXY_SERVER) {
       launchOptions.proxy = {
-        server: `${proxyUrl.protocol}//${proxyUrl.hostname}:${proxyUrl.port}`,
-        username: proxyUrl.username,
-        password: proxyUrl.password,
+        server: process.env.PROXY_SERVER,
+        username: process.env.PROXY_USER,
+        password: process.env.PROXY_PASS,
       };
     }
     browser = await chromium.launch(launchOptions);
@@ -171,7 +169,7 @@ app.get('/test-proxy', async (req, res) => {
     const body = await page.evaluate(() => document.body ? document.body.innerText : 'no body');
     const url = page.url();
     await browser.close();
-    res.json({ proxyConfigured: !!process.env.PROXY_URL, url, body });
+    res.json({ proxyConfigured: !!process.env.PROXY_SERVER, url, body });
   } catch (err) {
     if (browser) await browser.close();
     res.status(500).json({ error: err.message });
