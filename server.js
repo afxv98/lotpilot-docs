@@ -51,6 +51,7 @@ app.post('/scrape', async (req, res) => {
       extraHTTPHeaders: {
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'X-SU-Geo': 'United States',
       }
     });
 
