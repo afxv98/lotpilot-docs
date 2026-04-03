@@ -66,7 +66,7 @@ app.post('/scrape', async (req, res) => {
     // Navigate with realistic referer
     await page.setExtraHTTPHeaders({
       'Referer': 'https://www.capitolnissan.com/',
-      'X-SU-JS': 'true',
+      'X-SU-Headless': 'html',
     });
 
     try {
