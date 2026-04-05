@@ -11,8 +11,9 @@ app.post('/scrape', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
 
-  const user = process.env.BRIGHTDATA_USER;
-  const pass = process.env.BRIGHTDATA_PASS;
+  const proxyServer = process.env.PROXY_SERVER; // e.g. http://gate.decodo.com:10000
+  const proxyUser = process.env.PROXY_USER;
+  const proxyPass = process.env.PROXY_PASS;
 
   const launchOptions = {
     headless: true,
@@ -25,14 +26,11 @@ app.post('/scrape', async (req, res) => {
     ],
   };
 
-  // Use Bright Data residential proxy (port 22225) if credentials are set.
-  // Make sure BRIGHTDATA_USER is your residential zone username, e.g.
-  //   brd-customer-XXXXXXXX-zone-residential1
-  if (user && pass) {
+  if (proxyServer && proxyUser && proxyPass) {
     launchOptions.proxy = {
-      server: 'http://brd.superproxy.io:22225',
-      username: user,
-      password: pass,
+      server: proxyServer,
+      username: proxyUser,
+      password: proxyPass,
     };
   }
 
@@ -90,18 +88,19 @@ app.post('/scrape', async (req, res) => {
 
 // Quick test: returns your exit IP as seen by an external service
 app.get('/test-proxy', async (req, res) => {
-  const user = process.env.BRIGHTDATA_USER;
-  const pass = process.env.BRIGHTDATA_PASS;
+  const proxyServer = process.env.PROXY_SERVER;
+  const proxyUser = process.env.PROXY_USER;
+  const proxyPass = process.env.PROXY_PASS;
 
   const launchOptions = {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote'],
   };
-  if (user && pass) {
+  if (proxyServer && proxyUser && proxyPass) {
     launchOptions.proxy = {
-      server: 'http://brd.superproxy.io:22225',
-      username: user,
-      password: pass,
+      server: proxyServer,
+      username: proxyUser,
+      password: proxyPass,
     };
   }
 
