@@ -7,15 +7,12 @@ chromium.use(StealthPlugin());
 const app = express();
 app.use(express.json());
 
-app.post('/scrape', async (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'url is required' });
+function buildLaunchOptions() {
+  const proxyServer = process.env.PROXY_SERVER;
+  const proxyUser   = process.env.PROXY_USER;
+  const proxyPass   = process.env.PROXY_PASS;
 
-  const proxyServer = process.env.PROXY_SERVER; // e.g. http://gate.decodo.com:10000
-  const proxyUser = process.env.PROXY_USER;
-  const proxyPass = process.env.PROXY_PASS;
-
-  const launchOptions = {
+  const opts = {
     headless: true,
     args: [
       '--no-sandbox',
@@ -27,57 +24,107 @@ app.post('/scrape', async (req, res) => {
   };
 
   if (proxyServer && proxyUser && proxyPass) {
-    launchOptions.proxy = {
-      server: proxyServer,
-      username: proxyUser,
-      password: proxyPass,
-    };
+    opts.proxy = { server: proxyServer, username: proxyUser, password: proxyPass };
   }
 
+  return opts;
+}
+
+app.post('/scrape', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
   let browser;
+  const screenshots = {}; // keyed by stage name, value = base64 PNG
+
   try {
-    browser = await chromium.launch(launchOptions);
+    browser = await chromium.launch(buildLaunchOptions());
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       locale: 'en-US',
       timezoneId: 'America/New_York',
       viewport: { width: 1280, height: 800 },
-      extraHTTPHeaders: {
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
+      extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
     });
 
     const page = await context.newPage();
 
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    // Wait until the body has meaningful content (not a blank or bot-check page)
-    await page.waitForFunction(
-      () => document.body && document.body.innerText.trim().length > 300,
-      { timeout: 30000 }
-    );
-
-    const html = await page.content();
-    const title = await page.title();
-    const finalUrl = page.url();
-    const bodyText = html.replace(/<[^>]+>/g, ' ');
-
-    const data = {
-      accidents: bodyText.match(/No Accidents.*?Reported|(\d+)\s+Accident/i)?.[0] || null,
-      owners: bodyText.match(/(\d+)-Owner/i)?.[0] || null,
-      service: bodyText.match(/(\d+)\s+Service\s+history/i)?.[0] || null,
-      use: bodyText.match(/Personal vehicle|Rental vehicle|Commercial/i)?.[0] || null,
-      location: bodyText.match(/Last owned in ([^\n<]+)/i)?.[1]?.trim() || null,
-      records: bodyText.match(/(\d+)\s+Detailed\s+records/i)?.[0] || null,
+    // Screenshot helper — never throws, so a failed capture won't abort the scrape
+    const snap = async (label) => {
+      try {
+        const buf = await page.screenshot({ fullPage: false });
+        screenshots[label] = buf.toString('base64');
+      } catch (_) {}
     };
 
-    res.json({
-      success: true,
-      title,
-      finalUrl,
-      data,
-      html: html.substring(0, 50000),
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await snap('after_goto');
+
+    // Wait for meaningful content
+    try {
+      await page.waitForFunction(
+        () => document.body && document.body.innerText.trim().length > 300,
+        { timeout: 30000 }
+      );
+    } catch (_) {
+      // Timed out — still take a snapshot so we can see what blocked us
+    }
+    await snap('after_wait');
+
+    const html      = await page.content();
+    const title     = await page.title();
+    const finalUrl  = page.url();
+    const bodyText  = html.replace(/<[^>]+>/g, ' ');
+
+    const data = {
+      accidents : bodyText.match(/No Accidents.*?Reported|(\d+)\s+Accident/i)?.[0]          || null,
+      owners    : bodyText.match(/(\d+)-Owner/i)?.[0]                                        || null,
+      service   : bodyText.match(/(\d+)\s+Service\s+history/i)?.[0]                         || null,
+      use       : bodyText.match(/Personal vehicle|Rental vehicle|Commercial/i)?.[0]         || null,
+      location  : bodyText.match(/Last owned in ([^\n<]+)/i)?.[1]?.trim()                   || null,
+      records   : bodyText.match(/(\d+)\s+Detailed\s+records/i)?.[0]                        || null,
+    };
+
+    res.json({ success: true, title, finalUrl, data, screenshots, html: html.substring(0, 50000) });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, screenshots });
+  } finally {
+    if (browser) await browser.close();
+  }
+});
+
+// View a screenshot as an actual image in the browser
+// POST /screenshot  { "url": "...", "stage": "after_wait" }
+app.post('/screenshot', async (req, res) => {
+  const { url, stage = 'after_wait' } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  let browser;
+  try {
+    browser = await chromium.launch(buildLaunchOptions());
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+      viewport: { width: 1280, height: 800 },
     });
+
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    if (stage === 'after_wait') {
+      try {
+        await page.waitForFunction(
+          () => document.body && document.body.innerText.trim().length > 300,
+          { timeout: 20000 }
+        );
+      } catch (_) {}
+    }
+
+    const buf = await page.screenshot({ fullPage: true });
+    res.setHeader('Content-Type', 'image/png');
+    res.send(buf);
 
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -86,27 +133,11 @@ app.post('/scrape', async (req, res) => {
   }
 });
 
-// Quick test: returns your exit IP as seen by an external service
+// Quick proxy check
 app.get('/test-proxy', async (req, res) => {
-  const proxyServer = process.env.PROXY_SERVER;
-  const proxyUser = process.env.PROXY_USER;
-  const proxyPass = process.env.PROXY_PASS;
-
-  const launchOptions = {
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote'],
-  };
-  if (proxyServer && proxyUser && proxyPass) {
-    launchOptions.proxy = {
-      server: proxyServer,
-      username: proxyUser,
-      password: proxyPass,
-    };
-  }
-
   let browser;
   try {
-    browser = await chromium.launch(launchOptions);
+    browser = await chromium.launch(buildLaunchOptions());
     const page = await (await browser.newContext()).newPage();
     await page.goto('https://ip.decodo.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
     const body = await page.innerText('body');
