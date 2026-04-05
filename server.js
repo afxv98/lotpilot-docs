@@ -1,12 +1,11 @@
 const express = require('express');
-const axios = require('axios');
-const https = require('https');
+const { chromium } = require('playwright-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+
+chromium.use(StealthPlugin());
 
 const app = express();
 app.use(express.json());
-
-// Bright Data Web Unlocker proxy agent (self-signed cert)
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 app.post('/scrape', async (req, res) => {
   const { url } = req.body;
@@ -14,28 +13,55 @@ app.post('/scrape', async (req, res) => {
 
   const user = process.env.BRIGHTDATA_USER;
   const pass = process.env.BRIGHTDATA_PASS;
-  if (!user || !pass) {
-    return res.status(500).json({ error: 'BRIGHTDATA_USER or BRIGHTDATA_PASS not configured' });
+
+  const launchOptions = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--no-zygote',
+      '--ignore-certificate-errors',
+    ],
+  };
+
+  // Use Bright Data residential proxy (port 22225) if credentials are set.
+  // Make sure BRIGHTDATA_USER is your residential zone username, e.g.
+  //   brd-customer-XXXXXXXX-zone-residential1
+  if (user && pass) {
+    launchOptions.proxy = {
+      server: 'http://brd.superproxy.io:22225',
+      username: user,
+      password: pass,
+    };
   }
 
+  let browser;
   try {
-    const response = await axios.get(url, {
-      proxy: {
-        protocol: 'https',
-        host: 'brd.superproxy.io',
-        port: 33335,
-        auth: { username: user, password: pass },
-      },
-      httpsAgent,
-      timeout: 120000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    browser = await chromium.launch(launchOptions);
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+      viewport: { width: 1280, height: 800 },
+      extraHTTPHeaders: {
         'Accept-Language': 'en-US,en;q=0.9',
       },
     });
 
-    const html = response.data || '';
-    const title = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() || '';
+    const page = await context.newPage();
+
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    // Wait until the body has meaningful content (not a blank or bot-check page)
+    await page.waitForFunction(
+      () => document.body && document.body.innerText.trim().length > 300,
+      { timeout: 30000 }
+    );
+
+    const html = await page.content();
+    const title = await page.title();
+    const finalUrl = page.url();
     const bodyText = html.replace(/<[^>]+>/g, ' ');
 
     const data = {
@@ -50,13 +76,46 @@ app.post('/scrape', async (req, res) => {
     res.json({
       success: true,
       title,
+      finalUrl,
       data,
       html: html.substring(0, 50000),
     });
 
   } catch (err) {
-    const detail = err.response?.data || err.message;
-    res.status(500).json({ success: false, error: detail });
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    if (browser) await browser.close();
+  }
+});
+
+// Quick test: returns your exit IP as seen by an external service
+app.get('/test-proxy', async (req, res) => {
+  const user = process.env.BRIGHTDATA_USER;
+  const pass = process.env.BRIGHTDATA_PASS;
+
+  const launchOptions = {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote'],
+  };
+  if (user && pass) {
+    launchOptions.proxy = {
+      server: 'http://brd.superproxy.io:22225',
+      username: user,
+      password: pass,
+    };
+  }
+
+  let browser;
+  try {
+    browser = await chromium.launch(launchOptions);
+    const page = await (await browser.newContext()).newPage();
+    await page.goto('https://ip.decodo.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const body = await page.innerText('body');
+    res.json({ success: true, ip: body.trim() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    if (browser) await browser.close();
   }
 });
 
